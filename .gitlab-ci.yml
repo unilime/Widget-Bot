@@ -1,0 +1,53 @@
+before_script:
+  ##
+  ## Install ssh-agent if not already installed, it is required by Docker.
+  ## (change apt-get to yum if you use an RPM-based image)
+  ##
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )'
+
+  ##
+  ## Run ssh-agent (inside the build environment)
+  ##
+  - eval $(ssh-agent -s)
+
+  ##
+  ## Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
+  ## We're using tr to fix line endings which makes ed25519 keys work
+  ## without extra base64 encoding.
+  ##
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+
+  ##
+  ## Create the SSH directory and give it the right permissions
+  ##
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+
+  ##
+  ## Use ssh-keyscan to scan the keys of your private server. Replace example.com
+  ## with your own domain name. You can copy and repeat that command if you have
+  ## more than one server to connect to.
+  ##
+  #- ssh-keyscan purple500ltd.com > ~/.ssh/known_hosts
+  #- chmod 644 ~/.ssh/known_hosts
+
+variables:
+  GIT_STRATEGY: none
+stages:
+  - deploy
+  - tests
+
+update_on_dev_job:
+  stage: deploy
+  script:
+    - ssh pytest@1.1.1.1 -p22 -o "StrictHostKeyChecking=no" -tt "cd /home/pytest/www/Pytest && source env/bin/activate && sh deploy.sh"
+  only:
+    - web
+
+tests_on_dev_job:
+  stage: tests
+  script:
+    - ssh pytest@1.1.1.1 -p22 -o "StrictHostKeyChecking=no" -tt "cd /home/pytest/www/Pytest && source env/bin/activate && sh test.sh"
+  only:
+    - schedules
+
